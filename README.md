@@ -1,7 +1,7 @@
 # LLM Output Helper
 
-Framework-free structured JSON output extraction for LLM responses.  
-Zero dependencies on LangChain, Agently, or any other agent framework.  
+Framework-free structured JSON output extraction for LLM responses.
+Zero dependencies on LangChain, Agently, or any other agent framework.
 Only requires `json5` for lenient JSON parsing.
 
 ## Why?
@@ -19,7 +19,7 @@ This tool uses a **three-layer fallback** strategy (inspired by [Agently](https:
 ## Status
 
 - [x] **Layer ① — `locator.py`** — complete, 48 tests passing
-- [ ] Layer ② — `repair.py` — coming next
+- [x] **Layer ② — `repair.py`** — complete, 44 tests passing
 - [ ] Layer ③ — `validator.py` — planned
 
 ## Install
@@ -39,27 +39,29 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```python
-from llm_output_helper import locate_all_json, locate_output_json
+from llm_output_helper import locate_output_json, parse_json
 
-response = '''
-Let me think about this...
-The answer should be:
+# A typical messy Chinese LLM response
+response = """
+Let me think about this step by step...
+The user wants to know: 什么是机器学习？
 
-```json
-{"question_type": "math", "answer": 42, "confidence": 0.95}
-```
-'''
+｛
+  "question_type"： "定义解释"，
+  "answer"： "机器学习是人工智能的一个分支"，
+  "confidence"： 0.9
+｝
+"""
 
-# Find all JSON blocks
-blocks = locate_all_json(response)
-# → ['{"question_type": "math", "answer": 42, "confidence": 0.95}']
-
-# Find the best match against a schema
-best = locate_output_json(
+# Layer ①: Find the JSON block in the raw text
+raw_json = locate_output_json(
     response,
-    schema={"question_type": str, "answer": int}
+    schema={"question_type": str, "answer": str, "confidence": float}
 )
-# → '{"question_type": "math", "answer": 42, "confidence": 0.95}'
+
+# Layer ②: Fix Chinese punctuation, close brackets, parse
+data = parse_json(raw_json)
+print(data["answer"])  # → 机器学习是人工智能的一个分支
 ```
 
 ## How It Works
@@ -71,6 +73,29 @@ A character-by-character state machine that:
 1. **Pre-processes** — converts Python-style `"""..."""` blocks and protects `[OUTPUT]` tags
 2. **Scans** in two alternating phases: *SEEK* (looking for `{` or `[`) and *CAPTURE* (tracking bracket depth, string boundaries, escape sequences)
 3. **Scores** — when multiple candidates are found and a schema is provided, each is parsed with json5 and scored by key overlap
+
+### Layer ②: JSON Repair
+
+Two-step pipeline:
+
+1. **`repair_json_fragment`** — context-aware state machine that normalizes Chinese/fullwidth structural punctuation (：→: ，→, ｛→{ etc.) while **preserving** content inside string values (地址：北京 stays untouched). Also handles smart quotes (“ ” → ") and fullwidth quotes (＂→").
+
+2. **`complete_json`** — stack scanner that closes unclosed brackets (`{` `[`), string quotes, and `//`/`/* */` comments. Essential when `max_tokens` chops a response mid-object.
+
+3. **`parse_json`** — pipes both steps together, calls json5.loads, with a fallback that wraps bare key:value pairs in `{}`.
+
+### What json5 alone CAN'T handle (why layer ② exists)
+
+| Error | json5 | repair.py |
+|-------|-------|-----------|
+| `：` Chinese colon | ❌ | ✅ |
+| `，` Chinese comma | ❌ | ✅ |
+| `｛｝［］` fullwidth brackets | ❌ | ✅ |
+| `"` `"` smart quotes | ❌ | ✅ |
+| missing closing `}`/`]` | ❌ | ✅ |
+| trailing comma `,}` | ✅ | — |
+| single quotes `'key'` | ✅ | — |
+| `//` comments | ✅ | — |
 
 ## Development
 
