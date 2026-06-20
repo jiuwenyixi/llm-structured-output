@@ -3,14 +3,14 @@
 [![中文](https://img.shields.io/badge/中文-README.md-red)](README.md)
 
 Framework-free structured JSON output extraction for LLM responses.
-Zero dependencies on LangChain, Agently, or any other agent framework.
+Zero dependencies on LangChain or any other agent framework.
 Only requires `json5` for lenient JSON parsing.
 
 ## Why?
 
 LLMs are notoriously bad at producing clean JSON. They add markdown backticks, trailing commas, Chinese punctuation, half-finished blocks, and chatty preambles. `response_format: json_object` helps, but not every model supports it — and even when it does, the output still needs cleaning.
 
-This tool uses a **three-layer fallback** strategy (inspired by [Agently](https://github.com/AgentEra/Agently)'s proven approach, code written from scratch):
+This tool uses a **three-layer fallback** strategy:
 
 | Layer | Module | Job |
 |-------|--------|-----|

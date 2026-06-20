@@ -2,13 +2,13 @@
 
 [![English](https://img.shields.io/badge/English-README_EN.md-blue)](README_EN.md)
 
-不依赖任何框架的 LLM 结构化输出提取工具。零依赖 LangChain、Agently 等 Agent 框架，只需 `json5` 做宽松 JSON 解析。
+不依赖任何框架的 LLM 结构化输出提取工具。零依赖 LangChain 等 Agent 框架，只需 `json5` 做宽松 JSON 解析。
 
 ## 为什么需要这个工具？
 
 LLM 输出的 JSON 质量一言难尽——夹带 markdown 代码块、中文标点、多余尾逗号、被 `max_tokens` 截断的半成品、甚至前面的"让我想想…"闲聊。`response_format: json_object` 参数能缓解一些，但不是所有模型都支持，而且就算支持，出来的东西照样需要清洗。
 
-本项目用**三层兜底**策略（算法思路参考 [Agently](https://github.com/AgentEra/Agently)，代码完全自写）：
+本项目用**三层兜底**策略：
 
 | 层 | 模块 | 职责 |
 |----|------|------|
@@ -105,14 +105,14 @@ print(data["answer"])  # → 机器学习是人工智能的一个分支
 
 ## 与同类工具的区别
 
-| | llm-output-helper | json_repair | outputguard | Agently |
-|----|:---:|:---:|:---:|:---:|
-| 多 JSON 块定位 | ✅ | ❌ | ✅ | ✅ |
-| 中文标点修复 | ✅ | ❌ | ❌ | ✅ |
-| 缺失括号补全 | ✅ | ✅ | ✅ | ✅ |
-| 字段校验+重试 | ✅ (开发中) | ❌ | ✅ | ✅ |
-| 零框架依赖 | ✅ | ✅ | ❌ | ❌ |
-| 一个函数入口 | ✅ | ✅ | ❌ | — |
+| | llm-output-helper | json_repair | outputguard |
+|----|:---:|:---:|:---:|
+| 多 JSON 块定位 | ✅ | ❌ | ✅ |
+| 中文标点修复 | ✅ | ❌ | ❌ |
+| 缺失括号补全 | ✅ | ✅ | ✅ |
+| 字段校验+重试 | ✅ (开发中) | ❌ | ✅ |
+| 零框架依赖 | ✅ | ✅ | ❌ |
+| 一个函数入口 | ✅ | ✅ | ❌ |
 
 ## 开发
 
