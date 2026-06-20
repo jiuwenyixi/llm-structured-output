@@ -31,8 +31,8 @@ pip install llm-output-helper
 Or from source:
 
 ```bash
-git clone https://github.com/your-username/llm-output-helper.git
-cd llm-output-helper
+git clone https://github.com/jiuwenyixi/llm-structured-output.git
+cd llm-structured-output
 pip install -e ".[dev]"
 ```
 

@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
 authors = [
-    {name = "Your Name", email = "your@email.com"},
+    {name = "HaiFeng Gu", email = "1091635234@qq.com"},
 ]
 keywords = ["llm", "json", "structured-output", "ai", "nlp"]
 classifiers = [
@@ -37,8 +37,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-username/llm-output-helper"
-Repository = "https://github.com/your-username/llm-output-helper"
+Homepage = "https://github.com/jiuwenyixi/llm-structured-output"
+Repository = "https://github.com/jiuwenyixi/llm-structured-output"
 
 [tool.setuptools]
 package-dir = {"" = "."}
