@@ -2,37 +2,43 @@
 
 [![中文](https://img.shields.io/badge/中文-README.md-red)](README.md)
 
-Framework-free structured JSON output extraction for LLM responses.
-Zero dependencies on LangChain or any other agent framework.
-Only requires `json5` for lenient JSON parsing.
+Framework-free structured JSON output extraction for LLM responses. One function, three layers, zero framework dependencies.
+
+```python
+from llm_output_helper import structured_output
+
+data = structured_output(
+    text=model_response,
+    schema={
+        "summary": (str, "meeting conclusion, under 100 chars"),
+        "action_items": [{
+            "task": (str, "action item description"),
+            "owner": (str, "assignee name"),
+            "deadline": (str, "due date"),
+        }],
+    },
+    ensure_keys=["summary", "action_items[*].task", "action_items[*].owner"],
+    max_retries=2,
+    on_retry=lambda feedback: call_your_llm(feedback),
+)
+```
 
 ## Why?
 
-LLMs are notoriously bad at producing clean JSON. They add markdown backticks, trailing commas, Chinese punctuation, half-finished blocks, and chatty preambles. `response_format: json_object` helps, but not every model supports it — and even when it does, the output still needs cleaning.
-
-This tool uses a **three-layer fallback** strategy:
+LLMs produce messy JSON — markdown fences, Chinese punctuation, trailing commas, truncated fragments, and chatty preambles. This tool uses three-layer fallback to turn any model response into clean structured data.
 
 | Layer | Module | Job |
 |-------|--------|-----|
-| ① | `locator.py` | State-machine scan to find JSON blocks in raw text, schema-guided best-candidate selection |
-| ② | `repair.py` | Chinese→English punctuation, bracket completion, comment stripping, json5 parsing |
-| ③ | `validator.py` | Field presence & type check against schema, auto-retry with error feedback |
-
-## Status
-
-- [x] **Layer ① — `locator.py`** — complete, 48 tests passing
-- [x] **Layer ② — `repair.py`** — complete, 44 tests passing
-- [ ] Layer ③ — `validator.py` — planned
+| ① | `locator.py` | State machine finds JSON blocks in raw text; schema scoring picks best candidate |
+| ② | `repair.py` | Chinese → English punctuation, bracket completion, json5 parsing |
+| ③ | `validator.py` | Field presence & type check, auto-generates retry feedback |
 
 ## Install
 
 ```bash
 pip install llm-output-helper
-```
 
-Or from source:
-
-```bash
+# or from source
 git clone https://github.com/jiuwenyixi/llm-structured-output.git
 cd llm-structured-output
 pip install -e ".[dev]"
@@ -41,75 +47,71 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```python
-from llm_output_helper import locate_output_json, parse_json
+from llm_output_helper import structured_output
 
-# A typical messy Chinese LLM response
 response = """
 Let me think about this...
-The user wants to know: 什么是机器学习？
 
 ｛
-  "question_type"： "定义解释"，
-  "answer"： "机器学习是人工智能的一个分支"，
-  "confidence"： 0.9
+  "question_type"： "math"，
+  "answer"： "the answer is 42"
 ｝
 """
 
-# Layer ①: Find the JSON block in the raw text
-raw_json = locate_output_json(
-    response,
-    schema={"question_type": str, "answer": str, "confidence": float}
+data = structured_output(
+    text=response,
+    schema={"question_type": (str, ""), "answer": (str, "")},
+    ensure_keys=["question_type", "answer"],
 )
+print(data["answer"])  # → the answer is 42
+```
 
-# Layer ②: Fix Chinese punctuation, close brackets, parse
-data = parse_json(raw_json)
-print(data["answer"])  # → 机器学习是人工智能的一个分支
+With retry:
+
+```python
+def ask_llm(prompt):
+    return your_model.chat(prompt)
+
+data = structured_output(
+    text=ask_llm("Summarize the meeting..."),
+    schema={
+        "summary": (str, "conclusion"),
+        "action_items": [{
+            "task": (str, "task"),
+            "owner": (str, "person"),
+        }],
+    },
+    ensure_keys=["summary", "action_items[*].task", "action_items[*].owner"],
+    max_retries=2,
+    on_retry=lambda fb: ask_llm(f"Fix the following issues:\n{fb}"),
+)
 ```
 
 ## How It Works
 
 ### Layer ①: JSON Locator
 
-A character-by-character state machine that:
-
-1. **Pre-processes** — converts Python-style `"""..."""` blocks and protects `[OUTPUT]` tags
-2. **Scans** in two alternating phases: *SEEK* (looking for `{` or `[`) and *CAPTURE* (tracking bracket depth, string boundaries, escape sequences)
-3. **Scores** — when multiple candidates are found and a schema is provided, each is parsed with json5 and scored by key overlap
+Character-by-character state machine. Two phases: SEEK (find `{` `[`) and CAPTURE (track depth, strings, escapes). Handles fullwidth brackets `｛｝［］`. Truncated blocks are yielded for repair.
 
 ### Layer ②: JSON Repair
 
-Two-step pipeline:
+- **`repair_json_fragment`** — context-aware normalization of Chinese punctuation (`：→:` `，→,` `｛→{`), preserving string content
+- **`complete_json`** — closes unclosed brackets, strings, and comments
+- **`parse_json`** — one-call repair → complete → json5 parse
 
-**`repair_json_fragment`** — context-aware state machine:
-- Normalizes Chinese/fullwidth structural punctuation (`：→:` `，→,` `｛→{` etc.)
-- Normalizes smart quotes (`" "` → `"`)
-- Preserves string content (Chinese colons inside values like `"地址：北京"` are left untouched)
+### Layer ③: Field Validation & Retry
 
-**`complete_json`** — stack scanner:
-- Closes unclosed brackets (`{` `[`)
-- Closes unclosed string quotes
-- Handles `//` and `/* */` comments
+`ensure_keys` supports `[*]` wildcards and dot paths:
+- `"summary"` — must exist at top level
+- `"action_items[*].task"` — every array element must have `task`
 
-**`parse_json`** — one-call pipeline: repair → complete → json5.loads, with fallback wrapping for bare key:value pairs.
-
-### What json5 alone CAN'T handle (why layer ② exists)
-
-| Error | json5 | repair.py |
-|-------|:---:|:---:|
-| `：` Chinese colon | ❌ | ✅ |
-| `，` Chinese comma | ❌ | ✅ |
-| `｛｝［］` fullwidth brackets | ❌ | ✅ |
-| `"` `"` smart quotes | ❌ | ✅ |
-| missing closing `}`/`]` | ❌ | ✅ |
-| trailing comma `,}` | ✅ | — |
-| single quotes `'key'` | ✅ | — |
-| `//` comments | ✅ | — |
+Validation failure → auto-generates feedback → calls `on_retry` → new text back to layer ①. Raises `ValidationError` when retries are exhausted.
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -v
+pytest -v   # 113 tests
 ```
 
 ## License

@@ -143,8 +143,9 @@ def _json5_dumps(s: str) -> str:
 
 # Character classification helpers — tiny lookup sets for performance and
 # readability (avoids sprinkling ``in '{}'`` all over the state machine).
-_BRACKET_OPEN  = frozenset("{[")
-_BRACKET_CLOSE = frozenset("}]")
+# ASCII + fullwidth brackets (LLMs with Chinese prompts often emit these).
+_BRACKET_OPEN  = frozenset("{[｛［")
+_BRACKET_CLOSE = frozenset("}]｝］")
 
 
 def _scan_json_blocks(text: str) -> "iter[str]":
@@ -155,6 +156,9 @@ def _scan_json_blocks(text: str) -> "iter[str]":
     * **SEEK** (``stage=1``) — looking for an opening bracket.
     * **CAPTURE** (``stage=2``) — inside a JSON block, tracking depth,
       string boundaries, and escape sequences.
+
+    Blocks that are still open at end-of-text (e.g. truncated by
+    ``max_tokens``) are also yielded so the repair layer can close them.
     """
     stage: int = 1       # 1=SEEK, 2=CAPTURE
     block: list[str] = []  # current block chars
@@ -226,10 +230,14 @@ def _scan_json_blocks(text: str) -> "iter[str]":
             block.append(ch)
 
         # --- block boundary check -------------------------------------
-        if depth == 0:
+        if depth == 0 and stage == 2:
             yield "".join(block).replace("$<<OUTPUT>>", "[OUTPUT]")
             stage = 1
             block = []
+
+    # End of text: yield truncated block so repair layer can close it.
+    if stage == 2 and block:
+        yield "".join(block).replace("$<<OUTPUT>>", "[OUTPUT]")
 
 
 def _safe_peek(text: str, index: int) -> str:
@@ -265,14 +273,24 @@ def _score_schema_match(raw_json: str, schema_keys: set[str]) -> int:
 
     Returns -1 when *raw_json* cannot be parsed or is the wrong shape
     (e.g. a list when the schema describes a dict).
+
+    Attempts repair before parsing so Chinese-punctuation candidates
+    are scored correctly.
     """
     # Bail early if there are no keys to match — any valid JSON is fine.
     if not schema_keys:
         return 0
 
-    try:
-        parsed = _json5_loads(raw_json)
-    except Exception:
+    # Try raw parse first, then repair + parse.
+    parsed = None
+    for candidate in _candidates_to_try(raw_json):
+        try:
+            parsed = _json5_loads(candidate)
+            break
+        except Exception:
+            continue
+
+    if parsed is None:
         return -1
 
     # Schema keys imply an object — reject arrays.
@@ -284,6 +302,19 @@ def _score_schema_match(raw_json: str, schema_keys: set[str]) -> int:
         if _has_dotted_key(parsed, dotted_key):
             score += 1
     return score
+
+
+def _candidates_to_try(raw: str) -> "iter[str]":
+    """Yield candidate forms of *raw* to try parsing, from cheapest to most
+    expensive: raw → repaired → repaired+completed."""
+    yield raw
+    # Lazy import to avoid circular dependency at module level.
+    from llm_output_helper.repair import complete_json, repair_json_fragment  # noqa: PLC0415
+
+    repaired = repair_json_fragment(raw)
+    if repaired != raw:
+        yield repaired
+        yield complete_json(repaired)
 
 
 def _has_dotted_key(data: dict, dotted_key: str) -> bool:

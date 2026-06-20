@@ -36,9 +36,11 @@ class TestLocateAllJson:
         assert locate_all_json("{}") == ["{}"]
         assert locate_all_json("[]") == ["[]"]
 
-    def test_unclosed_brace_not_returned(self):
-        # Stage stays in CAPTURE, never returns to depth=0 → nothing yielded.
-        assert locate_all_json("{ 'name': 'test'  ") == []
+    def test_unclosed_brace_yielded_for_repair(self):
+        # Truncated JSON is yielded so the repair layer can close it.
+        result = locate_all_json("{ 'name': 'test'  ")
+        assert len(result) == 1
+        assert result[0].startswith("{")
 
     # --- simple blocks -----------------------------------------------------
 
