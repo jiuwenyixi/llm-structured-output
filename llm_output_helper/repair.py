@@ -1,3 +1,7 @@
+# Portions adapted from Agently. Copyright 2023-2026 AgentEra(Agently.Tech).
+# Licensed under the Apache License, Version 2.0. See LICENSE-APACHE-2.0
+# and THIRD_PARTY_NOTICES.md for attribution and local modifications.
+
 """JSON repair & completion — layer two of the structured output pipeline.
 
 Two-step pipeline for fixing broken LLM JSON output:
@@ -80,6 +84,13 @@ def parse_json(text: str) -> Any:
     """
     if not text or not text.strip():
         raise ValueError("Cannot parse empty input as JSON")
+
+    # Valid JSON5 must not be rewritten by repair heuristics (for example,
+    # curly quotes or punctuation that are actual string contents).
+    try:
+        return _json5_loads(text)
+    except ValueError:
+        pass
 
     repaired = repair_json_fragment(text)
     completed = complete_json(repaired)

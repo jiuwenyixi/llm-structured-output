@@ -36,7 +36,7 @@ LLMs produce messy JSON — markdown fences, Chinese punctuation, trailing comma
 ## Install
 
 ```bash
-pip install llm-output-helper
+pip install "git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.1.0"
 
 # or from source
 git clone https://github.com/jiuwenyixi/llm-structured-output.git
@@ -107,13 +107,34 @@ Character-by-character state machine. Two phases: SEEK (find `{` `[`) and CAPTUR
 
 Validation failure → auto-generates feedback → calls `on_retry` → new text back to layer ①. Raises `ValidationError` when retries are exhausted.
 
+## Validation and recovery limits
+
+- `schema` guides JSON candidate selection and type checks for paths listed in
+  `ensure_keys`. Passing only `schema` does not validate every field.
+- Nested wildcards such as `groups[*].items[*].name` use the corresponding item
+  schema. Boolean values are rejected for integer and float fields.
+- Extraction, parsing, and field validation share one `max_retries` callback
+  budget. Without a callback or after exhaustion, extraction/parse failures raise
+  `ValueError`; field failures raise `ValidationError`. Callback exceptions propagate.
+- Closing brackets or strings does not recover missing facts or prove business
+  correctness. Add domain validation before consuming important data.
+- Full Pydantic/JSON Schema constraints, async callbacks, and incremental streaming
+  are not implemented. Results may be objects or arrays.
+- This is a GitHub release. The install command uses the version tag and does not
+  claim publication on PyPI. See [examples/basic.py](examples/basic.py) for an
+  offline executable example.
+
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -v   # 113 tests
+pytest -v   # 144 tests
 ```
 
-## License
+## Attribution and license
 
-MIT
+Portions of JSON location, repair, and completion are adapted from
+[Agently](https://github.com/AgentEra/Agently). Adapted modules are distributed
+under Apache-2.0; other project code is MIT-licensed. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [LICENSE](LICENSE), and
+[LICENSE-APACHE-2.0](LICENSE-APACHE-2.0). Agently is not a runtime dependency.

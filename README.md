@@ -38,7 +38,7 @@ LLM 输出的 JSON 质量一言难尽——夹带 markdown 代码块、中文标
 ## 安装
 
 ```bash
-pip install llm-output-helper
+pip install "git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.1.0"
 
 # 或从源码
 git clone https://github.com/jiuwenyixi/llm-structured-output.git
@@ -117,24 +117,27 @@ data = structured_output(
 
 校验失败 → 自动生成反馈 → 调用 `on_retry` → 新文本回到第一层重新走。超限抛 `ValidationError`，脏数据不下传。
 
-## 与同类工具的区别
+## 使用边界
 
-| | llm-output-helper | json_repair | outputguard |
-|----|:---:|:---:|:---:|
-| 多 JSON 块定位 | ✅ | ❌ | ✅ |
-| 中文标点修复 | ✅ | ❌ | ❌ |
-| 缺失括号补全 | ✅ | ✅ | ✅ |
-| 字段校验+重试 | ✅ | ❌ | ✅ |
-| 零框架依赖 | ✅ | ✅ | ❌ |
-| 一个函数入口 | ✅ | ✅ | ❌ |
+- `schema` 用于候选 JSON 选择及指定字段的类型检查；**只传 `schema` 不会自动校验全部字段**，需要通过 `ensure_keys` 明确列出必填路径。
+- `ensure_keys` 支持多层 `[*]`，例如 `groups[*].items[*].name`；数组元素按对应层的模板检查类型。整数和浮点数字段不接受布尔值。
+- 提取失败、解析失败、字段校验失败共用 `max_retries` 次回调预算；无回调或预算耗尽时，提取/解析失败抛 `ValueError`，字段失败抛 `ValidationError`。回调自身的异常直接传播。
+- 补齐括号或引号只能恢复语法，不能恢复模型没有生成的内容，也不能保证业务正确性。重要字段应增加业务校验。
+- 当前没有 Pydantic / JSON Schema 完整约束校验、异步回调或增量流式 API；返回值可以是对象或数组。
+- 本次是 GitHub Release。上面的命令从版本标签安装；不代表已经发布到 PyPI。
+
+可运行的离线例子见 [examples/basic.py](examples/basic.py)。
 
 ## 开发
 
 ```bash
 pip install -e ".[dev]"
-pytest -v   # 113 tests
+pytest -v   # 144 tests
 ```
 
-## License
+## 来源与 License
 
-MIT
+JSON 定位、修复与补全的部分实现参考并改编自 [Agently](https://github.com/AgentEra/Agently)。
+这些派生模块按 Apache-2.0 发布，其余项目代码按 MIT 发布。详见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、[LICENSE](LICENSE) 和
+[LICENSE-APACHE-2.0](LICENSE-APACHE-2.0)。运行时不依赖 Agently。

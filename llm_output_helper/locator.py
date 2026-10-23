@@ -1,3 +1,7 @@
+# Portions adapted from Agently. Copyright 2023-2026 AgentEra(Agently.Tech).
+# Licensed under the Apache License, Version 2.0. See LICENSE-APACHE-2.0
+# and THIRD_PARTY_NOTICES.md for attribution and local modifications.
+
 """JSON block locator — layer one of the structured output pipeline.
 
 Scans raw LLM response text with a character-by-character state machine to find
@@ -164,6 +168,8 @@ def _scan_json_blocks(text: str) -> "iter[str]":
     block: list[str] = []  # current block chars
     depth: int = 0
     in_string: bool = False
+    string_delim = '"'
+    comment: Optional[str] = None
     skip_next: bool = False
 
     for i, ch in enumerate(text):
@@ -187,7 +193,22 @@ def _scan_json_blocks(text: str) -> "iter[str]":
         # --- CAPTURE phase --------------------------------------------
         # stage == 2 (inside a JSON block)
 
+        if comment:
+            block.append(ch)
+            if comment == "//" and ch in "\n\r":
+                comment = None
+            elif comment == "/*" and ch == "*" and _safe_peek(text, i) == "/":
+                block.append("/")
+                skip_next = True
+                comment = None
+            continue
+
         if not in_string:
+            if ch == "/" and _safe_peek(text, i) in ("/", "*"):
+                comment = ch + _safe_peek(text, i)
+                block.append(comment)
+                skip_next = True
+                continue
             # Backslash outside a string: could be an escaped quote
             # meant to be a literal inside a key/value.
             if ch == "\\":
@@ -199,8 +220,9 @@ def _scan_json_blocks(text: str) -> "iter[str]":
                 # keeping just the next char when it arrives next iteration
                 continue
 
-            if ch == '"':
+            if ch in ('"', "'"):
                 in_string = True
+                string_delim = ch
 
             elif ch in _BRACKET_OPEN:
                 depth += 1
@@ -224,7 +246,7 @@ def _scan_json_blocks(text: str) -> "iter[str]":
                 block.append("\\t")
                 continue
 
-            if ch == '"':
+            if ch == string_delim:
                 in_string = False
 
             block.append(ch)
@@ -314,7 +336,9 @@ def _candidates_to_try(raw: str) -> "iter[str]":
     repaired = repair_json_fragment(raw)
     if repaired != raw:
         yield repaired
-        yield complete_json(repaired)
+    completed = complete_json(repaired)
+    if completed != repaired:
+        yield completed
 
 
 def _has_dotted_key(data: dict, dotted_key: str) -> bool:

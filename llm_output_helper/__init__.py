@@ -42,7 +42,7 @@ def structured_output(
     ensure_keys: Optional[list[str]] = None,
     max_retries: int = 2,
     on_retry: Optional[Callable[[str], str]] = None,
-) -> dict:
+) -> Any:
     """Extract structured JSON from LLM response text with three-layer fallback.
 
     Parameters
@@ -72,7 +72,8 @@ def structured_output(
         If validation fails and *max_retries* > 0, error feedback is
         generated and passed to *on_retry*.
     max_retries:
-        Maximum retry attempts when ``ensure_keys`` validation fails.
+        Maximum callback retries after JSON extraction, parsing, or
+        ``ensure_keys`` validation fails. All stages share one budget.
         Each retry calls ``on_retry(feedback)`` to get fresh text,
         then runs the full pipeline again.
     on_retry:
@@ -86,7 +87,8 @@ def structured_output(
 
     Returns
     -------
-    Parsed Python dict.
+    Parsed Python object or array. ``schema`` alone selects a candidate;
+    only paths listed in ``ensure_keys`` are validated.
 
     Raises
     ------
@@ -103,43 +105,39 @@ def structured_output(
     last_errors: list[str] = []
 
     while True:
-        # Layer ①: locate
-        if schema and isinstance(schema, dict):
-            raw_json = locate_output_json(text, schema)
-        else:
-            candidates = locate_all_json(text)
-            raw_json = candidates[-1] if candidates else None
-
-        if raw_json is None:
-            raise ValueError("No JSON block found in the response text.")
-
-        # Layer ②: repair + parse
+        parse_error = None
+        data = None
         try:
-            data = parse_json(raw_json)
-        except ValueError as e:
-            raise ValueError(f"JSON parse failed after repair: {e}") from e
+            # Layer ①: locate
+            if schema and isinstance(schema, dict):
+                raw_json = locate_output_json(text, schema)
+            else:
+                candidates = locate_all_json(text)
+                raw_json = candidates[-1] if candidates else None
+            if raw_json is None:
+                raise ValueError("No JSON block found in the response text.")
 
-        # Layer ③: validate
-        current_errors = validate(data, ensure_keys, schema or {})
+            # Layer ②: repair + parse
+            data = parse_json(raw_json)
+        except ValueError as exc:
+            parse_error = exc
+            current_errors = [str(exc)]
+        else:
+            # Layer ③: validate
+            current_errors = validate(data, ensure_keys, schema or {})
         if not current_errors:
             return data
 
         last_errors = current_errors
-        remaining -= 1
-        if remaining < 0:
-            break
-
-        if on_retry is None:
-            raise ValidationError(
-                current_errors,
-                data,
-            )
+        if remaining <= 0 or on_retry is None:
+            if parse_error is not None:
+                raise parse_error
+            raise ValidationError(last_errors, data)
 
         # Generate feedback and retry
+        remaining -= 1
         feedback = make_retry_feedback(current_errors)
         text = on_retry(feedback)
-
-    raise ValidationError(last_errors, data)
 
 
 __all__ = [

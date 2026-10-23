@@ -64,7 +64,7 @@ def make_retry_feedback(errors: list[str]) -> str:
     """
     numbered = "\n".join(f"  {i+1}. {e}" for i, e in enumerate(errors))
     return (
-        f"上次输出的 JSON 解析失败，存在以下问题：\n"
+        f"上次输出的 JSON 解析或校验失败，存在以下问题：\n"
         f"{numbered}\n"
         f"请根据上述问题修正后重新输出完整的 JSON，不要遗漏任何字段。"
     )
@@ -87,7 +87,7 @@ def _check_pattern(
     """Walk *pattern* against *data*, appending errors when keys are missing
     or have wrong types."""
     # Split on "[*]." boundaries — handle the wildcard array traversal.
-    segments = _WILDCARD_RE.split(pattern)
+    segments = _WILDCARD_RE.split(pattern, maxsplit=1)
 
     if len(segments) == 1:
         # No wildcard — a simple dotted path.
@@ -96,7 +96,8 @@ def _check_pattern(
 
     # There's a [*] — walk through the prefix, then fan out over the array.
     prefix = segments[0].rstrip(".")
-    suffix = ".".join(s for s in segments[1:] if s).lstrip(".")
+    suffix = segments[1].lstrip(".")
+    array_path = _fmt_path(path, prefix)
 
     # Resolve the prefix to the array.
     if prefix:
@@ -106,22 +107,31 @@ def _check_pattern(
 
     if not isinstance(arr, list):
         errors.append(
-            f"字段 '{path or pattern}' 应为数组，实际类型为 {type(arr).__name__}"
+            f"字段 '{array_path or pattern}' 应为数组，实际类型为 {type(arr).__name__}"
         )
         return
 
     if len(arr) == 0:
         errors.append(
-            f"字段 '{path or pattern}' 是空数组，需要至少包含一个元素"
+            f"字段 '{array_path or pattern}' 是空数组，需要至少包含一个元素"
         )
         return
 
+    array_schema = schema
+    for part in filter(None, prefix.split(".")):
+        array_schema = array_schema.get(part) if isinstance(array_schema, dict) else None
+    item_schema = array_schema[0] if isinstance(array_schema, list) and array_schema else {}
+
     for idx, item in enumerate(arr):
-        item_path = f"{path}[{idx}]" if path else f"[{idx}]"
+        item_path = f"{array_path}[{idx}]"
         if suffix:
-            _check_dotted(item, suffix, schema, errors, item_path)
+            _check_pattern(item, suffix, item_schema, errors, item_path)
         elif item is None:
             errors.append(f"字段 '{item_path}' 不能为空")
+        else:
+            expected = _get_expected_type({"item": item_schema}, ["item"])
+            if expected and not _type_matches(item, expected):
+                errors.append(f"字段 '{item_path}' 类型错误: 期望 {expected}, 实际 {type(item).__name__}")
 
 
 def _check_dotted(
@@ -216,7 +226,7 @@ def _get_expected_type(schema: dict, parts: list[str]) -> Optional[str]:
                 return None
         elif isinstance(cursor, list):
             # Schema says "list of X" — look inside first template element.
-            if cursor:
+            if cursor and isinstance(cursor[0], dict):
                 cursor = cursor[0].get(part)
             else:
                 return None
@@ -228,6 +238,10 @@ def _get_expected_type(schema: dict, parts: list[str]) -> Optional[str]:
         return _type_name(cursor[0])
     if isinstance(cursor, type):
         return _type_name(cursor)
+    if isinstance(cursor, dict):
+        return "dict"
+    if isinstance(cursor, list):
+        return "list"
     return None
 
 
@@ -250,4 +264,6 @@ def _type_matches(value: Any, expected: str) -> bool:
     py_type = type_map.get(expected)
     if py_type is None:
         return True  # unknown type — skip check
+    if py_type in (int, float) and isinstance(value, bool):
+        return False
     return isinstance(value, py_type)
