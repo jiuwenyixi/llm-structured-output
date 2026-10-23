@@ -22,6 +22,12 @@
 - Release gate: base-only installation plus optional-extra installation, offline
   examples, wheel/sdist metadata checks, and the full remote Python matrix.
 - No model requests or paid services are used in this release verification.
+- Independent base wheel install passed 148 tests with one model-module skip;
+  installing the wheel's [pydantic] extra then passed 171 tests and both examples.
+- Minimum-version CI caught Pydantic 2.0 rejecting the newer include_input error
+  API parameter. Removed that parameter and retained an explicit loc/msg-only
+  feedback projection; the existing bounded/no-input-feedback assertions cover
+  the behavior. Keep the Pydantic 2.0 job as a release gate.
 
 ## 2026-10-24 — Codex — first release preparation
 

@@ -45,7 +45,9 @@ def prepare_output_model(
             instance = output_model.model_validate(data, strict=strict)
         except ModelValidationError as exc:
             errors = []
-            details = exc.errors(include_url=False, include_context=False, include_input=False)
+            # Pydantic 2.0 lacks include_input. Select only loc/msg below so raw
+            # input entries never enter feedback on either old or new versions.
+            details = exc.errors(include_url=False, include_context=False)
             for detail in details[:8]:
                 path = _format_location(detail.get("loc", ()))
                 errors.append(f"{path}: {detail.get('msg', 'Invalid value')}"[:300])
