@@ -33,7 +33,7 @@ from llm_output_helper.locator import locate_all_json, locate_output_json
 from llm_output_helper.repair import complete_json, parse_json, repair_json_fragment
 from llm_output_helper.validator import ValidationError, make_retry_feedback, validate
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def structured_output(
@@ -42,6 +42,9 @@ def structured_output(
     ensure_keys: Optional[list[str]] = None,
     max_retries: int = 2,
     on_retry: Optional[Callable[[str], str]] = None,
+    *,
+    output_model: Optional[type] = None,
+    model_strict: Optional[bool] = None,
 ) -> Any:
     """Extract structured JSON from LLM response text with three-layer fallback.
 
@@ -84,11 +87,22 @@ def structured_output(
 
         If not provided and retries are needed, a ``ValidationError``
         is raised after the first attempt.
+    output_model:
+        Optional Pydantic v2 BaseModel class. Validates the entire parsed value
+        before ensure_keys checks, then returns model_dump(mode="python").
+        Requires the optional [pydantic] extra. Without an explicit schema,
+        model field names and string aliases guide JSON candidate selection.
+        ensure_keys addresses normalized field names, after model validation.
+    model_strict:
+        Pydantic strict override: None honors model configuration (including
+        normal Pydantic coercion), True rejects coercion, False permits it.
+        This option requires output_model.
 
     Returns
     -------
     Parsed Python object or array. ``schema`` alone selects a candidate;
-    only paths listed in ``ensure_keys`` are validated.
+    only paths listed in ``ensure_keys`` are validated unless output_model is
+    provided. Model output may contain Python-native types such as datetime.
 
     Raises
     ------
@@ -100,6 +114,17 @@ def structured_output(
     if ensure_keys is None:
         ensure_keys = []
 
+    model_validator = None
+    selection_schema = schema
+    if output_model is not None:
+        from llm_output_helper.model_validation import prepare_output_model
+
+        model_validator, model_schema = prepare_output_model(output_model, model_strict)
+        if schema is None:
+            selection_schema = model_schema
+    elif model_strict is not None:
+        raise TypeError("model_strict requires output_model.")
+
     # --- attempt loop -------------------------------------------------------
     remaining = max(0, max_retries)
     last_errors: list[str] = []
@@ -109,8 +134,8 @@ def structured_output(
         data = None
         try:
             # Layer ①: locate
-            if schema and isinstance(schema, dict):
-                raw_json = locate_output_json(text, schema)
+            if selection_schema and isinstance(selection_schema, dict):
+                raw_json = locate_output_json(text, selection_schema)
             else:
                 candidates = locate_all_json(text)
                 raw_json = candidates[-1] if candidates else None
@@ -124,7 +149,13 @@ def structured_output(
             current_errors = [str(exc)]
         else:
             # Layer ③: validate
-            current_errors = validate(data, ensure_keys, schema or {})
+            try:
+                if model_validator is not None:
+                    data = model_validator(data)
+            except ValidationError as exc:
+                current_errors = exc.errors
+            else:
+                current_errors = validate(data, ensure_keys, schema or {})
         if not current_errors:
             return data
 

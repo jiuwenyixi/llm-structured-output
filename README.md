@@ -38,7 +38,7 @@ LLM 输出的 JSON 质量一言难尽——夹带 markdown 代码块、中文标
 ## 安装
 
 ```bash
-pip install "git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.1.0"
+pip install "git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.2.0"
 
 # 或从源码
 git clone https://github.com/jiuwenyixi/llm-structured-output.git
@@ -96,6 +96,44 @@ data = structured_output(
 )
 ```
 
+## 可选：Pydantic 完整约束校验（v0.2.0）
+
+```bash
+pip install "llm-output-helper[pydantic] @ git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.2.0"
+```
+
+```python
+from typing import Literal
+from pydantic import BaseModel, Field
+from llm_output_helper import structured_output
+
+class Ticket(BaseModel):
+    title: str = Field(min_length=3, max_length=80)
+    priority: int = Field(ge=1, le=3)
+    status: Literal["open", "closed"]
+
+data = structured_output(
+    text='{"title":"修复解析器", "priority":2, "status":"open"}',
+    output_model=Ticket,
+    model_strict=True,
+)
+```
+
+传入 `output_model` 后，即使不写 `ensure_keys`，也会校验整个模型的字段、范围、长度、
+枚举、别名及自定义规则。失败时返回有界字段反馈并使用同一个 `on_retry` / `max_retries`
+预算；耗尽后抛本库的 `ValidationError`。未安装可选依赖、传错模型或 validator 内的
+编程异常直接抛出，不消耗模型重试。
+
+返回值保持普通容器，来自 `model_dump(mode="python")`：字段名归一化、默认值和模型
+允许的转换会反映在结果中；日期或枚举等可能保留 Python 原生对象，不承诺直接可 JSON 序列化。
+`ensure_keys` 在模型校验后执行，使用归一化后的字段名。
+`model_strict=None` 默认遵循 Pydantic 模型配置，可能转换类型；`True` 显式禁止强制转换，
+`False` 显式允许。它只控制模型类型校验，不控制前面的 JSON 修复。
+未传 `schema` 时，模型字段名和字符串别名仅作为候选选择提示；最终仍以模型校验为准。
+支持 `RootModel` 数组结果；JSON 标量根、异步和流式入口尚未提供。
+
+完整离线重试示例见 [examples/pydantic_validation.py](examples/pydantic_validation.py)。
+
 ## 三层兜底详解
 
 ### ① JSON 定位器
@@ -119,11 +157,11 @@ data = structured_output(
 
 ## 使用边界
 
-- `schema` 用于候选 JSON 选择及指定字段的类型检查；**只传 `schema` 不会自动校验全部字段**，需要通过 `ensure_keys` 明确列出必填路径。
-- `ensure_keys` 支持多层 `[*]`，例如 `groups[*].items[*].name`；数组元素按对应层的模板检查类型。整数和浮点数字段不接受布尔值。
+- 普通字典 `schema` 用于候选 JSON 选择及指定字段的类型检查；**只传 `schema` 不会自动校验全部字段**，需要通过 `ensure_keys` 明确列出必填路径，或用 `output_model` 做完整模型校验。
+- `ensure_keys` 支持多层 `[*]`，例如 `groups[*].items[*].name`；数组元素按对应层的模板检查类型。普通 schema 的整数和浮点数字段不接受布尔值；Pydantic 则按其模型配置和 `model_strict` 处理转换。
 - 提取失败、解析失败、字段校验失败共用 `max_retries` 次回调预算；无回调或预算耗尽时，提取/解析失败抛 `ValueError`，字段失败抛 `ValidationError`。回调自身的异常直接传播。
 - 补齐括号或引号只能恢复语法，不能恢复模型没有生成的内容，也不能保证业务正确性。重要字段应增加业务校验。
-- 当前没有 Pydantic / JSON Schema 完整约束校验、异步回调或增量流式 API；返回值可以是对象或数组。
+- 支持可选 Pydantic v2 模型校验；尚无独立 JSON Schema 校验器、异步回调或增量流式 API；返回值可以是对象或数组。
 - 本次是 GitHub Release。上面的命令从版本标签安装；不代表已经发布到 PyPI。
 
 可运行的离线例子见 [examples/basic.py](examples/basic.py)。
@@ -132,7 +170,9 @@ data = structured_output(
 
 ```bash
 pip install -e ".[dev]"
-pytest -v   # 144 tests
+pytest -v   # base: 148 passed, model suite skipped without Pydantic
+pip install -e ".[pydantic]"
+pytest -v   # 171 tests with Pydantic v2
 ```
 
 ## 来源与 License

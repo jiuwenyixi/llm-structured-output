@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.0 — 2026-10-24
+
+- Add keyword-only `output_model` for optional Pydantic v2 whole-model validation.
+  Field constraints, aliases, defaults, nested/root-array models, and custom
+  rules are checked before required-path validation.
+- Add `model_strict`: None honors model configuration; True/False explicitly
+  override coercion. Candidate hints use model fields and string aliases when
+  no dictionary schema is supplied.
+- Model errors share the existing extraction/parse/field retry budget, with at
+  most eight field messages of 300 characters each, excluding Pydantic input
+  and context entries. Configuration and programming errors do not retry.
+- Return ordinary containers via `model_dump(mode="python")`, preserving native
+  Python types where appropriate. `ensure_keys` uses normalized field names.
+- Keep the base runtime dependency as json5; expose Pydantic through the optional
+  `[pydantic]` extra. Existing five positional arguments remain supported.
+- Add 27 tests, bringing the optional-feature suite to 171; base-only installs
+  pass 148 tests and skip the model test module. Add an offline model retry example.
+- Scalar roots, async callbacks, streaming, repair provenance, and standalone
+  JSON Schema validation remain outside this release.
+
 ## 0.1.0 — 2026-10-24
 
 First GitHub release of LLM Output Helper, an early-stage, framework-independent

@@ -36,7 +36,7 @@ LLMs produce messy JSON — markdown fences, Chinese punctuation, trailing comma
 ## Install
 
 ```bash
-pip install "git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.1.0"
+pip install "git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.2.0"
 
 # or from source
 git clone https://github.com/jiuwenyixi/llm-structured-output.git
@@ -87,6 +87,47 @@ data = structured_output(
 )
 ```
 
+## Optional Pydantic v2 constraints (v0.2.0)
+
+```bash
+pip install "llm-output-helper[pydantic] @ git+https://github.com/jiuwenyixi/llm-structured-output.git@v0.2.0"
+```
+
+```python
+from typing import Literal
+from pydantic import BaseModel, Field
+from llm_output_helper import structured_output
+
+class Ticket(BaseModel):
+    title: str = Field(min_length=3, max_length=80)
+    priority: int = Field(ge=1, le=3)
+    status: Literal["open", "closed"]
+
+data = structured_output(
+    '{"title":"Fix parser", "priority":2, "status":"open"}',
+    output_model=Ticket,
+    model_strict=True,
+)
+```
+
+The whole model is validated even without `ensure_keys`. Constraints, aliases,
+defaults and custom model rules belong to Pydantic. Model errors use bounded
+field feedback and share the existing callback retry budget; exhaustion raises
+this library's `ValidationError`. Missing dependencies, configuration errors,
+validator programming errors and dump failures propagate without retries.
+
+Results remain ordinary containers from `model_dump(mode="python")`, using
+normalized field names and validated/defaulted values. Types such as dates or
+enums may remain Python objects, so results are not necessarily JSON-serializable.
+`ensure_keys` checks normalized names after model validation. `model_strict=None`
+honors model configuration and may coerce values; True forbids coercion and False
+allows it. This setting does not disable JSON repair. Without an explicit schema,
+model fields/string aliases provide candidate-selection hints; validation is the
+final authority. RootModel arrays are supported; scalar roots are not.
+
+See [examples/pydantic_validation.py](examples/pydantic_validation.py) for an
+offline constraint failure followed by a successful bounded retry.
+
 ## How It Works
 
 ### Layer ①: JSON Locator
@@ -110,16 +151,19 @@ Validation failure → auto-generates feedback → calls `on_retry` → new text
 ## Validation and recovery limits
 
 - `schema` guides JSON candidate selection and type checks for paths listed in
-  `ensure_keys`. Passing only `schema` does not validate every field.
+  `ensure_keys`. Passing only a dictionary `schema` does not validate every field;
+  use `output_model` for whole-model validation.
 - Nested wildcards such as `groups[*].items[*].name` use the corresponding item
-  schema. Boolean values are rejected for integer and float fields.
+  schema. Plain schema checks reject booleans for integer/float fields; Pydantic
+  coercion follows its configuration and `model_strict`.
 - Extraction, parsing, and field validation share one `max_retries` callback
   budget. Without a callback or after exhaustion, extraction/parse failures raise
   `ValueError`; field failures raise `ValidationError`. Callback exceptions propagate.
 - Closing brackets or strings does not recover missing facts or prove business
   correctness. Add domain validation before consuming important data.
-- Full Pydantic/JSON Schema constraints, async callbacks, and incremental streaming
-  are not implemented. Results may be objects or arrays.
+- Pydantic v2 model validation is optional. A standalone JSON Schema validator,
+  async callbacks, and incremental streaming are not implemented. Results may be
+  objects or arrays.
 - This is a GitHub release. The install command uses the version tag and does not
   claim publication on PyPI. See [examples/basic.py](examples/basic.py) for an
   offline executable example.
@@ -128,7 +172,9 @@ Validation failure → auto-generates feedback → calls `on_retry` → new text
 
 ```bash
 pip install -e ".[dev]"
-pytest -v   # 144 tests
+pytest -v   # base: 148 passed, model suite skipped without Pydantic
+pip install -e ".[pydantic]"
+pytest -v   # 171 tests with Pydantic v2
 ```
 
 ## Attribution and license

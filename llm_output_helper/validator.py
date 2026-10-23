@@ -18,7 +18,7 @@ from typing import Any, Callable, Optional
 # ============================================================================
 
 class ValidationError(Exception):
-    """Raised when ``ensure_keys`` validation fails after all retries."""
+    """Raised when required-field or optional model validation cannot succeed."""
 
     def __init__(self, errors: list[str], data: Any = None):
         self.errors = errors

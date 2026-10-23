@@ -1,5 +1,28 @@
 # Development log
 
+## 2026-10-24 — Codex — v0.2.0 optional model validation
+
+- v0.1.0 was published at dd041fd29820f8ce4a3b818611b07dff54dbf8f6:
+  https://github.com/jiuwenyixi/llm-structured-output/releases/tag/v0.1.0.
+  CI 39995381231 passed all Python 3.8/3.10/3.13 jobs. The first tag and its
+  wheel/sdist are retained unchanged.
+- User explicitly requested a subsequent code iteration and a second release.
+  Selected the optional Pydantic integration from the Agently comparison.
+- Added output_model and model_strict without changing the original positional
+  arguments or eagerly importing a new dependency. Configuration is checked once
+  before callback work. Model constraints, normalized results, and ensure_keys
+  participate in the same bounded attempt loop.
+- Bounded Pydantic errors exclude input/context entries; custom validator TypeError
+  and serialization errors propagate. Normal coercion follows model configuration;
+  callers may explicitly enable strict mode. The output is a Python-mode dump,
+  not a model instance or guaranteed JSON-serializable representation.
+- Local optional suite: 171 tests passed; includes nested aliases/defaults,
+  ranges/enums/lengths, root arrays, cross-field validators, budget sharing,
+  missing/v1 dependency errors, lazy import, and invalid configuration.
+- Release gate: base-only installation plus optional-extra installation, offline
+  examples, wheel/sdist metadata checks, and the full remote Python matrix.
+- No model requests or paid services are used in this release verification.
+
 ## 2026-10-24 — Codex — first release preparation
 
 - Scope: publish the first GitHub release and review current Agently structured

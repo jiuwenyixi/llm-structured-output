@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-output-helper"
-version = "0.1.0"
+version = "0.2.0"
 description = "Framework-free LLM structured output utility — three-layer fallback for JSON extraction"
 readme = "README.md"
 license = {text = "MIT AND Apache-2.0"}
@@ -31,6 +31,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+pydantic = [
+    "pydantic>=2,<3",
+]
 dev = [
     "pytest>=7.0",
 ]
