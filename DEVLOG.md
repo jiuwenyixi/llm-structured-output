@@ -1,5 +1,23 @@
 # Development log
 
+## 2026-10-24 — Codex — PyPI publication preparation
+
+- User requested publishing the latest release to PyPI. The project name
+  `llm-output-helper` currently returns 404; ownership is not reserved yet.
+- No local PyPI upload credential was available. Prepared GitHub OIDC Trusted
+  Publishing instead of creating or storing a long-lived API token.
+- Added manual-only `.github/workflows/publish-pypi.yml` and the GitHub `pypi`
+  environment. The workflow runs on main, downloads the existing v0.2.0 release
+  assets, verifies both exact SHA-256 hashes, and checks metadata before upload.
+  OIDC permission is confined to the publishing job, which does not check out
+  or execute repository code. Publishing action is pinned to its current
+  release/v1 commit 7245906fb61fa33a13554f9d5fb856fe61758086.
+- Wheel/sdist passed `twine check` again. Publication is pending PyPI account
+  login and registering the matching pending publisher; no upload has run.
+- Required binding: project `llm-output-helper`, owner `jiuwenyixi`, repository
+  `llm-structured-output`, workflow `publish-pypi.yml`, environment `pypi`.
+- Keep Git-tag installation docs until PyPI upload and installation are verified.
+
 ## 2026-10-24 — Codex — v0.2.0 optional model validation
 
 - v0.1.0 was published at dd041fd29820f8ce4a3b818611b07dff54dbf8f6:
