@@ -25,3 +25,11 @@
   that metadata syntax is retained for the declared Python 3.8 build compatibility.
 - Larger iterations (Pydantic, async/streaming, provenance) require separate API
   design and representative evaluation; they are not included in 0.1.0.
+- Remote CI recovery: the gh OAuth credential could not create workflows, so the
+  already-authorized GitHub connector created/updated the workflow. No account
+  permission was expanded. The first workflow-only baseline run hit the original
+  broken build backend. The first release-candidate run then hit a runner setup
+  issue: `ubuntu-latest` selected Ubuntu 26.04, for which setup-python could not
+  provision Python 3.8. Python 3.10 and 3.13 completed all functional/build/smoke
+  steps. Pinned Ubuntu 22.04 and disabled matrix fail-fast; verify the replacement
+  run before publishing, rather than treating the failed aggregate as passed.
