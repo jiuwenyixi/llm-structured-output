@@ -175,9 +175,8 @@ pip install -e ".[pydantic]"
 pytest -v   # 171 tests with Pydantic v2
 ```
 
-## 来源与 License
+## License
 
-JSON 定位、修复与补全的部分实现参考并改编自 [Agently](https://github.com/AgentEra/Agently)。
-这些派生模块按 Apache-2.0 发布，其余项目代码按 MIT 发布。详见
+项目代码按 MIT 与 Apache-2.0 分别授权，具体适用范围见
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、[LICENSE](LICENSE) 和
-[LICENSE-APACHE-2.0](LICENSE-APACHE-2.0)。运行时不依赖 Agently。
+[LICENSE-APACHE-2.0](LICENSE-APACHE-2.0)。

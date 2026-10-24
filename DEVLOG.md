@@ -1,5 +1,14 @@
 # Development log
 
+## 2026-10-24 — Codex — concise README license section
+
+- Removed the explicit upstream introduction from both README languages at the
+  user's request. Kept a concise license summary and links to the full terms.
+- Retained source-file attribution, third-party notices, distribution metadata,
+  and license texts. No runtime or package-artifact changes.
+- Verified both README files contain no upstream project name and all license
+  links resolve to existing repository files. Reviewed the documentation diff.
+
 ## 2026-10-24 — Codex — PyPI publication preparation
 
 - User requested publishing the latest release to PyPI. The project name

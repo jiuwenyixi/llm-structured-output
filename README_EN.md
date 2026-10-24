@@ -177,10 +177,8 @@ pip install -e ".[pydantic]"
 pytest -v   # 171 tests with Pydantic v2
 ```
 
-## Attribution and license
+## License
 
-Portions of JSON location, repair, and completion are adapted from
-[Agently](https://github.com/AgentEra/Agently). Adapted modules are distributed
-under Apache-2.0; other project code is MIT-licensed. See
+Project code is distributed under MIT and Apache-2.0, as applicable. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [LICENSE](LICENSE), and
-[LICENSE-APACHE-2.0](LICENSE-APACHE-2.0). Agently is not a runtime dependency.
+[LICENSE-APACHE-2.0](LICENSE-APACHE-2.0) for scope and terms.
